@@ -2,11 +2,11 @@ import operator
 from abc import ABC
 from dataclasses import dataclass
 from functools import reduce
-from typing import Any, Dict, List, Type, Union
+from typing import Any, Dict, List, Type, Union, Optional, TypeVar, Generic
 
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 from redis.commands.search.aggregation import AggregateRequest
 from redis_om import Field, HashModel, JsonModel
 from redis_om.model.model import (
@@ -19,6 +19,9 @@ from redis_om.model.model import (
 from .config import model_field_class_config
 from .query import RediSearchQuery
 from .registry import document_registry
+
+
+T = TypeVar('T', bound=RedisModel)
 
 
 @dataclass
@@ -320,7 +323,7 @@ def decode_string(value: Union[str, bytes]) -> str:
     return value
 
 
-class JsonDocument(Document, JsonModel, ABC):
+class JsonDocument(Document, Generic[T], JsonModel, ABC):
     """A Document that uses Redis JSON storage"""
 
     @classmethod
@@ -334,8 +337,42 @@ class JsonDocument(Document, JsonModel, ABC):
         super().__pydantic_init_subclass__(**kwargs)
         document_registry.register(cls)
 
+    @classmethod
+    def from_orm(cls, obj: T):
+        field_data = {}
+        for name, field in cls.model_fields.items():
+            if name == 'id':
+                field_data[name] = str(getattr(obj, 'pk'))
+            elif hasattr(obj, name):
+                field_data[name] = getattr(obj, name)
+            elif field.alias and hasattr(obj, field.alias):
+                field_data[name] = getattr(obj, field.alias)
+        return cls(**field_data)
 
-class EmbeddedJsonDocument(Document, EmbeddedJsonModel, ABC):
+    @classmethod
+    def prepare(cls, obj: T):
+        return cls.from_orm(obj).model_dump(by_alias=True)
+
+    @classmethod
+    def prepare_many(cls, objs: List[T]):
+        return [cls.prepare(obj) for obj in objs]
+
+    def model_dump(self, *args, **kwargs):
+        kwargs.setdefault('by_alias', True)
+        return super().model_dump(*args, **kwargs)
+
+    @classmethod
+    def get_field_mapping(cls) -> Dict[str, str]:
+        mapping = {}
+        for name, field in cls.model_fields.items():
+            if field.alias:
+                mapping[field.alias] = name
+            else:
+                mapping[name] = name
+        return mapping
+
+
+class EmbeddedJsonDocument(Document, Generic[T], EmbeddedJsonModel, ABC):
     """An Embedded Document that uses Redis JSON storage"""
 
     @classmethod
@@ -348,6 +385,38 @@ class EmbeddedJsonDocument(Document, EmbeddedJsonModel, ABC):
 
         super().__pydantic_init_subclass__(**kwargs)
         document_registry.register(cls)
+
+    @classmethod
+    def from_orm(cls, obj: T):
+        field_data = {}
+        for name, field in cls.model_fields.items():
+            if hasattr(obj, name):
+                field_data[name] = getattr(obj, name)
+            elif field.alias and hasattr(obj, field.alias):
+                field_data[name] = getattr(obj, field.alias)
+        return cls(**field_data)
+
+    @classmethod
+    def prepare(cls, obj: T):
+        return cls.from_orm(obj).model_dump(by_alias=True)
+
+    @classmethod
+    def prepare_many(cls, objs: List[T]):
+        return [cls.prepare(obj) for obj in objs]
+
+    def model_dump(self, *args, **kwargs):
+        kwargs.setdefault('by_alias', True)
+        return super().model_dump(*args, **kwargs)
+
+    @classmethod
+    def get_field_mapping(cls) -> Dict[str, str]:
+        mapping = {}
+        for name, field in cls.model_fields.items():
+            if field.alias:
+                mapping[field.alias] = name
+            else:
+                mapping[name] = name
+        return mapping
 
 
 class HashDocument(Document, HashModel, ABC):
