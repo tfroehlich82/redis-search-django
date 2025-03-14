@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Type, Union
 
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
-from pydantic.fields import ModelField
+from pydantic import ConfigDict
 from redis.commands.search.aggregation import AggregateRequest
 from redis_om import Field, HashModel, JsonModel
 from redis_om.model.model import (
@@ -102,7 +102,7 @@ class Document(RedisModel, ABC):
         """Build a document data dictionary from a Django Model instance"""
         data = {}
 
-        for field_name, field in cls.__fields__.items():
+        for field_name, field in cls.model_fields.items():
             field_type = field.type_
             # Check if Document is embedded in another Document
             is_embedded = issubclass(field_type, EmbeddedJsonDocument)
@@ -260,12 +260,12 @@ class Document(RedisModel, ABC):
     @classmethod
     def add_django_fields(cls, field_names: List[str]) -> None:
         """Dynamically add fields to the document"""
-        fields: Dict[str, ModelField] = {}
+        fields: Dict[str, ConfigDict] = {}
         type_annotations: Dict[str, type] = {}
         is_embedded = issubclass(cls, EmbeddedJsonDocument)
 
         for field_name in field_names:
-            if field_name in cls.__fields__ or field_name in ["id", "pk"]:
+            if field_name in cls.model_fields or field_name in ["id", "pk"]:
                 continue
 
             field_type = cls._django.model._meta.get_field(field_name)
@@ -294,16 +294,16 @@ class Document(RedisModel, ABC):
             type_annotations[field_name] = annotation
 
             # Create a new Field object with the field_info dict
-            fields[field_name] = ModelField(
+            fields[field_name] = ConfigDict(
                 name=field_name,
                 class_validators={},
-                model_config=cls.__config__,
+                model_config=cls.model_config,
                 type_=annotation,
                 required=required,
                 field_info=field_info,
             )
 
-        cls.__fields__.update(fields)
+        cls.model_fields.update(fields)
         cls.__annotations__.update(type_annotations)
 
     @property
@@ -323,40 +323,43 @@ def decode_string(value: Union[str, bytes]) -> str:
 class JsonDocument(Document, JsonModel, ABC):
     """A Document that uses Redis JSON storage"""
 
-    def __init_subclass__(cls, **kwargs: Any) -> None:
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
         """Initialize the Subclass class with proper Django options and fields"""
         cls._django = DjangoOptions(getattr(cls, "Django", None))
 
         if cls._django.fields:
             cls.add_django_fields(cls._django.fields)
 
-        super().__init_subclass__(**kwargs)
+        super().__pydantic_init_subclass__(**kwargs)
         document_registry.register(cls)
 
 
 class EmbeddedJsonDocument(Document, EmbeddedJsonModel, ABC):
     """An Embedded Document that uses Redis JSON storage"""
 
-    def __init_subclass__(cls, **kwargs: Any) -> None:
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
         """Initialize the Subclass class with proper Django options and fields"""
         cls._django = DjangoOptions(getattr(cls, "Django", None))
 
         if cls._django.fields:
             cls.add_django_fields(cls._django.fields)
 
-        super().__init_subclass__(**kwargs)
+        super().__pydantic_init_subclass__(**kwargs)
         document_registry.register(cls)
 
 
 class HashDocument(Document, HashModel, ABC):
     """A Document that uses Redis Hash storage"""
 
-    def __init_subclass__(cls, **kwargs: Any) -> None:
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
         """Initialize the Subclass class with proper Django options and fields"""
         cls._django = DjangoOptions(getattr(cls, "Django", None))
 
         if cls._django.fields:
             cls.add_django_fields(cls._django.fields)
 
-        super().__init_subclass__(**kwargs)
+        super().__pydantic_init_subclass__(**kwargs)
         document_registry.register(cls)

@@ -108,43 +108,43 @@ def test_json_document_with_django_fields_including_related_field(document_class
 def test_json_document_with_django_fields(document_class):
     CategoryJsonDocument = document_class(JsonDocument, Category, ["name"])
 
-    assert list(CategoryJsonDocument.__fields__.keys()) == ["pk", "name"]
+    assert list(CategoryJsonDocument.model_fields.keys()) == ["pk", "name"]
 
 
 def test_json_document_with_django_fields_including_id(document_class):
     CategoryJsonDocument = document_class(JsonDocument, Category, ["name", "id"])
 
-    assert list(CategoryJsonDocument.__fields__.keys()) == ["pk", "name"]
+    assert list(CategoryJsonDocument.model_fields.keys()) == ["pk", "name"]
 
 
 def test_json_document_without_django_fields(document_class):
     CategoryJsonDocument = document_class(JsonDocument, Category, [])
 
-    assert list(CategoryJsonDocument.__fields__.keys()) == ["pk"]
+    assert list(CategoryJsonDocument.model_fields.keys()) == ["pk"]
 
 
 def test_embedded_json_document_with_django_fields(document_class):
     CategoryJsonDocument = document_class(EmbeddedJsonDocument, Category, ["name"])
 
-    assert list(CategoryJsonDocument.__fields__.keys()) == ["pk", "name"]
+    assert list(CategoryJsonDocument.model_fields.keys()) == ["pk", "name"]
 
 
 def test_embedded_json_document_without_django_fields(document_class):
     CategoryJsonDocument = document_class(EmbeddedJsonDocument, Category, [])
 
-    assert list(CategoryJsonDocument.__fields__.keys()) == ["pk"]
+    assert list(CategoryJsonDocument.model_fields.keys()) == ["pk"]
 
 
 def test_hash_document_with_django_fields(document_class):
     CategoryJsonDocument = document_class(HashDocument, Category, ["name"])
 
-    assert list(CategoryJsonDocument.__fields__.keys()) == ["pk", "name"]
+    assert list(CategoryJsonDocument.model_fields.keys()) == ["pk", "name"]
 
 
 def test_hash_document_without_django_fields(document_class):
     CategoryJsonDocument = document_class(HashDocument, Category, [])
 
-    assert list(CategoryJsonDocument.__fields__.keys()) == ["pk"]
+    assert list(CategoryJsonDocument.model_fields.keys()) == ["pk"]
 
 
 @pytest.mark.skipif(not is_redis_running(), reason="Redis is not running")
